@@ -144,7 +144,7 @@ def update_deq_params(state, grads):
 
 
 def apply_model(deq_state, cnn_state, images, labels):
-    """Apply gradients for DEQ model"""
+    """Define loss function and compute gradients for deq model"""
 
     def loss_fn(deq_params):
         logits = deq.apply({'params': deq_params},
