@@ -16,6 +16,7 @@ CNN_CHANNELS = 154
 CHANNELS = 28
 NUM_GROUP = 7
 NUM_GROUPS = 7
+NUM_CLASSES = 10
 LEARNING_RATE = 0.001
 BATCH_SIZE = 100
 EPOCHS = 50
@@ -52,7 +53,7 @@ class DEQ(nn.Module):
     num_groups: int
     solver: Callable
     f: nn.Module
-    classes: int = 10
+    classes: int = NUM_CLASSES
 
     def setup(self):
         self.model = self.f(channels=self.cnn_channels, output_channels=self.channels,
@@ -69,14 +70,13 @@ class DEQ(nn.Module):
         x = self.norm1(x)
         x = fixed_point_layer(self.solver, self.model, cnn_params, x)
         x = self.norm2(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
+        x = x.reshape((x.shape[0], -1))
         x = self.dense(x)
         return x
 
 
 @partial(jax.custom_vjp, nondiff_argnums=(0, 1))
 def fixed_point_layer(solver, f: nn.Module, params, x):
-    """computing z_star with a root finder(solver)"""
     z_star = solver(lambda z: f.apply({'params': params}, x, z), z_init=jnp.zeros_like(x))
     return z_star
 
@@ -88,10 +88,9 @@ def fixed_point_fwd(solver, f, params, x):
 
 # Custom backward pass for fixed point layer
 def fixed_point_bwd(solver, f: nn.Module, res, z_star_bar):
-    """Implicit differentiation"""
     params, x, z_star = res
     _, vjp_a = jax.vjp(lambda params, x: f.apply({'params': params}, x, z_star), params, x)
-    _, vjp_z = jax.vjp(lambda z: f.apply({'params': params}, x, z), z_star)  # compute vjp with respect to z_star
+    _, vjp_z = jax.vjp(lambda z: f.apply({'params': params}, x, z), z_star)
     return vjp_a(solver(lambda u: vjp_z(u)[0] + z_star_bar,
                         z_init=jnp.zeros_like(z_star)))
 
@@ -132,11 +131,10 @@ def create_state_for_deq(rng, dummy_input, learning_rate,
     )
 
 
-def update_cnn_params(state, solver, images):
+def update_cnn_params(state, images):
     """Updating CNN model's parameters with applying gradients"""
-    grads = jax.grad(lambda params: fixed_point_layer(solver,
-                                                      cnn, params, images).sum())(
-        state.params)  # Compute gradients with respect to parameters
+    grads = jax.grad(lambda params: fixed_point_layer(anderson_solver,
+                                                      cnn, params, images).sum())(state.params)
     return state.apply_gradients(grads=grads)
 
 
@@ -152,7 +150,7 @@ def apply_model(deq_state, cnn_state, images, labels):
         logits = deq.apply({'params': deq_params},
                            images,
                            cnn_state.params)
-        one_hot = jax.nn.one_hot(labels, 10)
+        one_hot = jax.nn.one_hot(labels, NUM_CLASSES)
         loss = jnp.mean(optax.softmax_cross_entropy(logits=logits, labels=one_hot))
         return loss, logits
 
@@ -172,9 +170,9 @@ def train_epoch(deq_state, cnn_state, images, labels, batch_size, rng, epoch):
     perms = perms.reshape((step_per_epoch, batch_size))
     epoch_loss = []
     epoch_acc = []
-    with tqdm(perms) as tq:
-        for perm in tq:
-            tq.set_description(f"Epoch {epoch}")
+    with tqdm(perms) as tq_perms:
+        for perm in tq_perms:
+            tq_perms.set_description(f"Epoch {epoch}")
             batch_images = images[perm, ...]
             batch_labels = labels[perm, ...]
             grads, loss, acc = apply_model(deq_state=deq_state,
@@ -182,10 +180,10 @@ def train_epoch(deq_state, cnn_state, images, labels, batch_size, rng, epoch):
                                            images=batch_images,
                                            labels=batch_labels)
             deq_state = update_deq_params(deq_state, grads)
-            cnn_state = update_cnn_params(cnn_state, deq.solver, batch_images)
-            tq.set_postfix(loss=loss, accuracy=acc * 100)
+            cnn_state = update_cnn_params(cnn_state, batch_images)
             epoch_loss.append(loss)
             epoch_acc.append(acc)
+            tq_perms.set_postfix(loss=loss, accuracy=acc * 100)
 
     train_loss = np.mean(epoch_loss)
     train_acc = np.mean(epoch_acc)
@@ -203,7 +201,6 @@ def get_dataset():
 
 
 def train(work_dir):
-    """Training process"""
     train_images, train_labels, test_images, test_labels = get_dataset()
     rng = jax.random.PRNGKey(0)
     rng, init_rng_deq, init_rng_cnn = jax.random.split(rng, num=3)
@@ -216,14 +213,14 @@ def train(work_dir):
                                      cnn_params=cnn_state.params,
                                      learning_rate=LEARNING_RATE)
 
-    # using tensorboard to check model's behavior
+    # using tensorboard to check model's behaviour
     summary = tensorboard.SummaryWriter(work_dir)
     summary.hparams({'learning_rate': LEARNING_RATE,
                      'batch_size': BATCH_SIZE,
                      'num_epochs': EPOCHS})
 
     for epoch in range(1, EPOCHS + 1):
-        rng, perm_rng = jax.random.split(rng, num=2)
+        rng, _, _ = jax.random.split(rng, num=3)
         deq_state, cnn_state, train_loss, train_acc = train_epoch(
             deq_state=deq_state,
             cnn_state=cnn_state,
@@ -231,7 +228,7 @@ def train(work_dir):
             labels=train_labels,
             batch_size=BATCH_SIZE,
             epoch=epoch,
-            rng=perm_rng
+            rng=rng
         )  # train a single epoch
         _, test_loss, test_acc = apply_model(deq_state=deq_state,
                                              cnn_state=cnn_state,
