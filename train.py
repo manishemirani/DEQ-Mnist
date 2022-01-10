@@ -230,11 +230,11 @@ def train(work_dir):
             epoch=epoch,
             rng=rng
         )  # train a single epoch
+        print(f"Testing at epoch {epoch}")
         _, test_loss, test_acc = apply_model(deq_state=deq_state,
                                              cnn_state=cnn_state,
                                              images=test_images,
                                              labels=test_labels)  # model testing
-        print(f"Testing at epoch {epoch}")
         print("test loss: %.2f, test accuracy: %2.f" % (test_loss, test_acc * 100))
 
         summary.scalar('train_loss', train_loss, epoch)
