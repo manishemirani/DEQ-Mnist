@@ -24,7 +24,6 @@ def anderson_solver(f, z_init, m=5, lam=1e-4, max_iter=25, tol=1e-2, beta=1.0):
     H = H.at[:, 1:, 0].set(1)
     y = jnp.zeros(shape=(batch_size, m + 1, 1), dtype=z_init.dtype)
     y = y.at[:, 0].set(1)
-    res = []
     for k in range(2, max_iter):
         n = min(k, m)
         G = F[:, :n] - X[:, :n]
@@ -34,8 +33,7 @@ def anderson_solver(f, z_init, m=5, lam=1e-4, max_iter=25, tol=1e-2, beta=1.0):
         X = X.at[:, k % m].set(
             beta * (alpha[:, None] @ F[:, :n])[:, 0] + (1 - beta) * (alpha[:, None] @ X[:, :n])[:, 0])
         F = F.at[:, k % m].set(f(X[:, k % m].reshape(batch_size, d, h)).reshape(batch_size, -1))
-        res.append(jnp.linalg.norm(F[:, k % m] - X[:, k % m]).item() / (1e-5 + jnp.linalg.norm(F[:, k % m]).item()))
-        if res[-1] < tol:
+        if jnp.linalg.norm(F[:, k % m] - X[:, k % m]).item() / (1e-5 + jnp.linalg.norm(F[:, k % m]).item()) < tol:
             break
 
     return X[:, k % m].reshape(batch_size, d, h)
