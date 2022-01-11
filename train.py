@@ -40,9 +40,9 @@ class CNN(nn.Module):
         self.group_norm3 = nn.GroupNorm(self.num_groups)
 
     @nn.compact
-    def __call__(self, x, z):
+    def __call__(self, inputs, z):
         y = self.group_norm1(nn.relu(self.conv1(z)))
-        return self.group_norm3(nn.relu(z + self.group_norm2(x + self.conv2(y))))
+        return self.group_norm3(nn.relu(z + self.group_norm2(inputs + self.conv2(y))))
 
 
 # Define Deep Equilibrium model
@@ -61,13 +61,13 @@ class DEQ(nn.Module):
         self.dense = nn.Dense(self.classes)
 
     @nn.compact
-    def __call__(self, x, cnn_params):
-        x = self.conv1(x)
+    def __call__(self, inputs, cnn_params):
+        x = self.conv1(inputs)
         x = nn.relu(x)
         x = self.norm1(x)
         x = fixed_point_layer(self.solver, self.f, cnn_params, x)
         x = self.norm2(x)
-        x = x.reshape((x.shape[0], -1))
+        x = x.reshape((x.shape[0], -1)) # flatten
         x = self.dense(x)
         return x
 
@@ -218,7 +218,7 @@ def train(work_dir):
                      'num_epochs': EPOCHS})
 
     for epoch in range(1, EPOCHS + 1):
-        rng, _, _ = jax.random.split(rng, num=3)
+        rng, input_rng = jax.random.split(rng)
         deq_state, cnn_state, train_loss, train_acc = train_epoch(
             deq_state=deq_state,
             cnn_state=cnn_state,
@@ -226,7 +226,7 @@ def train(work_dir):
             labels=train_labels,
             batch_size=BATCH_SIZE,
             epoch=epoch,
-            rng=rng
+            rng=input_rng
         )  # train a single epoch
         print(f"Testing at epoch {epoch}")
         _, test_loss, test_acc = apply_model(deq_state=deq_state,
