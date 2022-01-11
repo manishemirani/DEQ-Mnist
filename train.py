@@ -14,8 +14,7 @@ from tqdm import tqdm
 # define hparams
 CNN_CHANNELS = 154
 CHANNELS = 28
-NUM_GROUP = 7
-NUM_GROUPS = 7
+NUM_GROUPS = 7  # CNN_CHANNELS and CHANNELS should be divisible by NUM_GROUPS
 NUM_CLASSES = 10
 LEARNING_RATE = 0.001
 BATCH_SIZE = 100
@@ -56,8 +55,8 @@ class DEQ(nn.Module):
     classes: int = NUM_CLASSES
 
     def setup(self):
-        self.model = self.f(channels=self.cnn_channels, output_channels=self.channels,
-                            num_groups=self.num_groups)
+        # self.model = self.f(channels=self.cnn_channels, output_channels=self.channels,
+        #                     num_groups=self.num_groups)
         self.conv1 = nn.Conv(features=self.channels, kernel_size=(3, 3))
         self.norm1 = nn.LayerNorm()
         self.norm2 = nn.LayerNorm()
@@ -68,7 +67,7 @@ class DEQ(nn.Module):
         x = self.conv1(x)
         x = nn.relu(x)
         x = self.norm1(x)
-        x = fixed_point_layer(self.solver, self.model, cnn_params, x)
+        x = fixed_point_layer(self.solver, self.f, cnn_params, x)
         x = self.norm2(x)
         x = x.reshape((x.shape[0], -1))
         x = self.dense(x)
@@ -89,8 +88,9 @@ def fixed_point_fwd(solver, f, params, x):
 # Custom backward pass for fixed point layer
 def fixed_point_bwd(solver, f: nn.Module, res, z_star_bar):
     params, x, z_star = res
-    _, vjp_a = jax.vjp(lambda params, x: f.apply({'params': params}, x, z_star), params, x)
-    _, vjp_z = jax.vjp(lambda z: f.apply({'params': params}, x, z), z_star)
+    _, vjp_a = jax.vjp(lambda params, x: f.apply({'params': params}, x, z_star), params,
+                       x)  # vjp of f with respect to parameters
+    _, vjp_z = jax.vjp(lambda z: f.apply({'params': params}, x, z), z_star)  # vjp of f with respect to z_star
     return vjp_a(solver(lambda u: vjp_z(u)[0] + z_star_bar,
                         z_init=jnp.zeros_like(z_star)))
 
@@ -99,13 +99,13 @@ fixed_point_layer.defvjp(fixed_point_fwd, fixed_point_bwd)
 
 cnn = CNN(channels=CNN_CHANNELS,
           output_channels=CHANNELS,
-          num_groups=NUM_GROUP)
+          num_groups=NUM_GROUPS)
 
 deq = DEQ(cnn_channels=CNN_CHANNELS,
           channels=CHANNELS,
-          num_groups=NUM_GROUP,
+          num_groups=NUM_GROUPS,
           solver=anderson_solver,
-          f=CNN)
+          f=cnn)
 
 
 def create_state_for_CNN(rng, dummy_input, learning_rate):
