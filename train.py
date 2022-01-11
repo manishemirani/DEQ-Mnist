@@ -55,8 +55,6 @@ class DEQ(nn.Module):
     classes: int = NUM_CLASSES
 
     def setup(self):
-        # self.model = self.f(channels=self.cnn_channels, output_channels=self.channels,
-        #                     num_groups=self.num_groups)
         self.conv1 = nn.Conv(features=self.channels, kernel_size=(3, 3))
         self.norm1 = nn.LayerNorm()
         self.norm2 = nn.LayerNorm()
