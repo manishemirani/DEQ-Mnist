@@ -14,7 +14,7 @@ from tqdm import tqdm
 # define hparams
 CNN_CHANNELS = 154
 CHANNELS = 28
-NUM_GROUPS = 7  # CNN_CHANNELS and CHANNELS should be divisible by NUM_GROUPS
+NUM_GROUPS = 7  # CNN_CHANNELS and CHANNELS have to be divisible by NUM_GROUPS
 NUM_CLASSES = 10
 LEARNING_RATE = 0.001
 BATCH_SIZE = 100
