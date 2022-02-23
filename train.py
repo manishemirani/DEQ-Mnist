@@ -142,7 +142,7 @@ def update_deq_params(state, grads):
 
 
 def apply_model(deq_state, cnn_state, images, labels):
-    """Define loss function and compute gradients for deq model"""
+    """Defines loss function and computes gradients for deq model"""
 
     def loss_fn(deq_params):
         logits = deq.apply({'params': deq_params},
@@ -159,7 +159,6 @@ def apply_model(deq_state, cnn_state, images, labels):
 
 
 def train_epoch(deq_state, cnn_state, images, labels, batch_size, rng, epoch):
-    """Train a single epoch"""
     step_per_epoch = len(images) // batch_size
 
     # Choosing random data for training
@@ -189,7 +188,7 @@ def train_epoch(deq_state, cnn_state, images, labels, batch_size, rng, epoch):
 
 
 def get_dataset():
-    """Getting dataset and preprocess it"""
+    """Downloading dataset"""
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     x_train = jnp.float32(x_train)
     x_test = jnp.float32(x_test)
