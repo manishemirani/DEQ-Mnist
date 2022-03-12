@@ -39,7 +39,6 @@ class CNN(nn.Module):
         self.group_norm2 = nn.GroupNorm(self.num_groups)
         self.group_norm3 = nn.GroupNorm(self.num_groups)
 
-    @nn.compact
     def __call__(self, inputs, z):
         y = self.group_norm1(nn.relu(self.conv1(z)))
         return self.group_norm3(nn.relu(z + self.group_norm2(inputs + self.conv2(y))))
@@ -60,7 +59,6 @@ class DEQ(nn.Module):
         self.norm2 = nn.LayerNorm()
         self.dense = nn.Dense(self.classes)
 
-    @nn.compact
     def __call__(self, inputs, cnn_params):
         x = self.conv1(inputs)
         x = nn.relu(x)
